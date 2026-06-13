@@ -32,7 +32,7 @@ class AgentState(TypedDict):
 
 def _build_graph():
     llm = ChatGroq(
-        model="llama-3.1-70b-versatile",
+        model="llama-3.3-70b-versatile",
         api_key=settings.GROQ_API_KEY,
         temperature=0.2,
     ).bind_tools(ALL_TOOLS)
