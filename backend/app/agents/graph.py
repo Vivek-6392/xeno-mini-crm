@@ -32,7 +32,7 @@ class AgentState(TypedDict):
 
 def _build_graph():
     llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
+        model="llama-3.1-70b-versatile",
         api_key=settings.GROQ_API_KEY,
         temperature=0.2,
     ).bind_tools(ALL_TOOLS)
@@ -66,22 +66,34 @@ crm_graph = _build_graph()
 # ── Public helpers ────────────────────────────────────────────────────────────
 
 def run_agent(user_message: str, history: list[dict]) -> str:
-    """
-    Synchronous entry point (intended to be called via asyncio.to_thread).
-
-    history items: {"role": "user"|"assistant", "content": "..."}
-    Returns the final assistant text response.
-    """
     from langchain_core.messages import AIMessage
 
-    messages: list[BaseMessage] = []
+    messages = []
+
     for msg in history:
         if msg["role"] == "user":
             messages.append(HumanMessage(content=msg["content"]))
         else:
             messages.append(AIMessage(content=msg["content"]))
+
     messages.append(HumanMessage(content=user_message))
 
-    result = crm_graph.invoke({"messages": messages})
-    last = result["messages"][-1]
-    return last.content
+    try:
+        result = crm_graph.invoke({
+            "messages": messages
+        })
+
+        last = result["messages"][-1]
+
+        return (
+            last.content
+            if isinstance(last.content, str)
+            else str(last.content)
+        )
+
+    except Exception as e:
+        logger.exception("Agent execution failed")
+
+        return (
+            f"Agent execution failed: {str(e)}"
+        )

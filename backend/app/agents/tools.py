@@ -71,21 +71,16 @@ def get_customer_stats(query: str = "") -> str:
 # ── 2. Segment preview ────────────────────────────────────────────────────────
 
 @tool
-def preview_segment(rules_json: str) -> str:
+def preview_segment(rules: dict) -> str:
     """
-    Count customers matching rules WITHOUT saving anything.
-    Use this to validate audience size before creating a segment.
+    Preview customers matching segment rules.
+    """
 
-    rules_json example:
-    {"operator":"AND","conditions":[
-        {"field":"total_spent","operator":"gte","value":5000},
-        {"field":"days_since_last_order","operator":"lte","value":30}
-    ]}
-    """
     db = _db()
+
     try:
-        rules = json.loads(rules_json)
         customers = evaluate_segment(db, rules)
+
         sample = [
             {
                 "name": c.name,
@@ -95,14 +90,15 @@ def preview_segment(rules_json: str) -> str:
             }
             for c in customers[:5]
         ]
+
         return json.dumps({
             "matching_count": len(customers),
             "sample_customers": sample,
         })
-    except json.JSONDecodeError as e:
-        return json.dumps({"error": f"Invalid JSON: {e}"})
+
     except Exception as e:
         return json.dumps({"error": str(e)})
+
     finally:
         db.close()
 
@@ -110,18 +106,18 @@ def preview_segment(rules_json: str) -> str:
 # ── 3. Create segment ─────────────────────────────────────────────────────────
 
 @tool
-def create_segment(name: str, description: str, rules_json: str) -> str:
+def create_segment(
+    name: str,
+    description: str,
+    rules: dict,
+) -> str:
     """
-    Save a customer segment to the database.
-    Returns the segment_id to use in launch_campaign.
+    Create and save a segment.
+    """
 
-    name        - human-readable label  e.g. "High-Value Loyalists"
-    description - one-sentence summary  e.g. "Customers with >₹5k spend, active last 30 days"
-    rules_json  - same format as preview_segment
-    """
     db = _db()
+
     try:
-        rules = json.loads(rules_json)
         customers = evaluate_segment(db, rules)
 
         seg = Segment(
@@ -131,21 +127,26 @@ def create_segment(name: str, description: str, rules_json: str) -> str:
             customer_count=len(customers),
             created_by_ai=True,
         )
+
         db.add(seg)
         db.commit()
+        db.refresh(seg)
 
         return json.dumps({
             "segment_id": seg.id,
             "name": seg.name,
             "customer_count": len(customers),
-            "message": f"✅ Segment '{name}' created — {len(customers)} customers matched.",
+            "message": f"Segment '{name}' created successfully.",
         })
+
     except Exception as e:
         db.rollback()
-        return json.dumps({"error": str(e)})
+        return json.dumps({
+            "error": str(e)
+        })
+
     finally:
         db.close()
-
 
 # ── 4. List segments ──────────────────────────────────────────────────────────
 
